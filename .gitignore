@@ -1,0 +1,14 @@
+# Ignorar o arquivo de configuração com senhas/IPs
+config.py
+
+# Ignorar arquivos temporários e de build
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.DS_Store
+
+# Ignorar pastas criadas pelo PyInstaller
+/build/
+/dist/
+*.spec
