@@ -5,8 +5,41 @@ from sshtunnel import SSHTunnelForwarder
 import subprocess
 import threading
 import json
+import sys
+import os
 from config import SERVIDORES, BASTIONS
 
+def interactive_shell(channel):
+    import select
+
+    def writeall():
+        try:
+            while True:
+                data = sys.stdin.read(1)
+                if not data:
+                    break
+                channel.send(data)
+        except Exception:
+            pass
+
+    writer = threading.Thread(target=writeall)
+    writer.daemon = True
+    writer.start()
+
+    while True:
+        try:
+            # Usa select para não travar leitura
+            r, _, _ = select.select([channel], [], [], 0.1)
+            if channel in r:
+                data = channel.recv(1024)
+                if not data:
+                    break
+                sys.stdout.write(data.decode(errors='ignore'))
+                sys.stdout.flush()
+            if channel.exit_status_ready() or channel.closed:
+                break
+        except Exception:
+            break
 
 def conectar_ssh(bastion_info, servidor_info):
     try:
@@ -16,7 +49,9 @@ def conectar_ssh(bastion_info, servidor_info):
             bastion_info["host"],
             username=bastion_info["user"],
             password=bastion_info["password"],
-            port=int(bastion_info["port"])
+            port=int(bastion_info["port"]),
+            look_for_keys=False,
+            allow_agent=False
         )
 
         bastion_transport = bastion.get_transport()
@@ -30,13 +65,20 @@ def conectar_ssh(bastion_info, servidor_info):
             servidor_info["host"],
             username=servidor_info["user"],
             password=servidor_info["password"],
-            sock=channel
+            sock=channel,
+            look_for_keys=False,
+            allow_agent=False
         )
 
-        stdin, stdout, stderr = final.exec_command("hostname && whoami")
-        output = stdout.read().decode()
-        messagebox.showinfo("Conectado!", f"Conexão SSH bem-sucedida!\n{output}")
+        transport = final.get_transport()
+        session = transport.open_session()
+        session.get_pty(term='xterm')
+        session.invoke_shell()
 
+        print("Conectado — shell interativo. Use Ctrl+D ou 'exit' para sair.")
+        interactive_shell(session)  
+
+        session.close()
         final.close()
         bastion.close()
 
@@ -71,10 +113,10 @@ def editar_config():
             bastions_data = json.loads(bastions_text.get("1.0", tk.END))
             servidores_data = json.loads(servidores_text.get("1.0", tk.END))
             with open("config.py", "w", encoding="utf-8") as f:
-                f.write("# Arquivo gerado automaticamente pelo Bastion Helper\n\n")
+                f.write("# Arquivo gerado automaticamente pelo Jump Helper\n\n")
                 f.write(f"BASTIONS = {json.dumps(bastions_data, indent=4)}\n\n")
                 f.write(f"SERVIDORES = {json.dumps(servidores_data, indent=4)}\n")
-            messagebox.showinfo("Sucesso", "Arquivo config.py atualizado com sucesso!")
+            messagebox.showinfo("Sucesso", "Arquivo atualizado com sucesso!\n\nReinicie o programa para aplicar as mudanças.")
             edit_window.destroy()
         except Exception as e:
             messagebox.showerror("Erro ao salvar", str(e))
@@ -98,19 +140,19 @@ def editar_config():
 
 def criar_interface():
     root = tk.Tk()
-    root.title("Bastion Helper")
+    root.title("Jump Helper")
     root.geometry("750x500")
 
     menu_bar = tk.Menu(root)
     root.config(menu=menu_bar)
     config_menu = tk.Menu(menu_bar, tearoff=0)
-    config_menu.add_command(label="Editar config.py", command=editar_config)
+    config_menu.add_command(label="Editar Servidores", command=editar_config)
     menu_bar.add_cascade(label="Configurações", menu=config_menu)
 
     main_frame = ttk.Frame(root, padding="20")
     main_frame.pack(fill=tk.BOTH, expand=True)
 
-    ttk.Label(main_frame, text="Bastion Helper", font=("Arial", 14, "bold")).pack(pady=(0, 20))
+    ttk.Label(main_frame, text="Jump Helper", font=("Arial", 14, "bold")).pack(pady=(0, 20))
 
     servers_container = ttk.Frame(main_frame)
     servers_container.pack(fill=tk.BOTH, expand=True, pady=(0, 20))
@@ -118,10 +160,10 @@ def criar_interface():
     # =========================
     # 🔹 Bastion
     # =========================
-    bastion_frame = ttk.LabelFrame(servers_container, text="Bastion", padding="15")
+    bastion_frame = ttk.LabelFrame(servers_container, text="Intermediário", padding="15")
     bastion_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
 
-    ttk.Label(bastion_frame, text="Selecione o Bastion:").pack(anchor="w", pady=(5, 0))
+    ttk.Label(bastion_frame, text="Selecione o servidor intermediário (Bastion):").pack(anchor="w", pady=(5, 0))
     bastion_cb = ttk.Combobox(bastion_frame, values=list(BASTIONS.keys()))
     bastion_cb.pack(fill=tk.X, pady=(2, 10))
 
@@ -178,7 +220,7 @@ def criar_interface():
     servidor_pass = ttk.Entry(servidor_frame, show="*")
     servidor_pass.pack(fill=tk.X, pady=2)
 
-    ttk.Label(servidor_frame, text="Porta SSH:").pack(anchor="w")
+    ttk.Label(servidor_frame, text="Porta:").pack(anchor="w")
     servidor_port = ttk.Entry(servidor_frame)
     servidor_port.pack(fill=tk.X, pady=2)
 
