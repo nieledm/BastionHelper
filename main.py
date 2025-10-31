@@ -1,4 +1,4 @@
-import gui
+from gui.main_window import criar_interface
 
 if __name__ == "__main__":
-    gui.criar_interface()
+    criar_interface()
