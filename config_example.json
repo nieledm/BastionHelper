@@ -1,0 +1,42 @@
+{
+    "BASTIONS": {
+        "Bastion1": {
+            "host": "xxx.xxx.xxx.xxx",
+            "user": "username1",
+            "password": "password1",
+            "port": "xx"
+        },
+        "Bastion2": {
+            "host": "xxx.xxx.xxx.xxx",
+            "user": "username2",
+            "password": "password2",
+            "port": "xx"
+        },
+        "Bastion3": {
+            "host": "xxx.xxx.xxx.xxx",
+            "user": "username3",
+            "password": "password3",
+            "port": "xx"
+        }
+    },
+    "SERVIDORES": {
+        "Servidor1": {
+            "host": "xxx.xxx.xxx.xxx",
+            "user": "username1",
+            "password": "password1",
+            "port": "xx"
+        },
+        "Servidor2": {
+            "host": "xxx.xxx.xxx.xxx",
+            "user": "username2",
+            "password": "password2",
+            "port": "xx"
+        },
+        "Servidor3": {
+            "host": "xxx.xxx.xxx.xxx",
+            "user": "username3",
+            "password": "password3",
+            "port": "xx"
+        }
+    }
+}

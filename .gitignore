@@ -1,5 +1,6 @@
 # Ignorar o arquivo de configuração com senhas/IPs
-config.py
+config.json
+compilar.txt
 
 # Ignorar arquivos temporários e de build
 __pycache__/
@@ -12,3 +13,6 @@ __pycache__/
 /build/
 /dist/
 *.spec
+
+# Criar o executável
+# pyinstaller --onefile main.pyk

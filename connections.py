@@ -3,7 +3,8 @@ import paramiko
 from sshtunnel import SSHTunnelForwarder
 import subprocess
 import threading
-import sys
+import sys, os, json
+import subprocess
 
 def interactive_shell(channel):
     import select
@@ -102,30 +103,45 @@ def criar_tunel_rdp(bastion_info, servidor_info, porta_local=3390):
 
     threading.Thread(target=iniciar_tunel).start()
 
+# Importações necessárias no topo do arquivo (já devem existir)
+
 def copiar_rsync(bastion_info, servidor_info, origem_local, destino_remoto):
-    # Constrói o comando SSH Proxy/Jump
-    # Você está usando a porta padrão 22 para o bastion, mas pode adaptar
-    ssh_proxy_cmd = (
-        f"ssh -J {bastion_info['user']}@{bastion_info['host']}:{bastion_info['port']}"
-    )
-
-    # Constrói o comando rsync
-    rsync_cmd = [
-        "rsync",
-        "-av", # Arquivo, verbose, preserva permissões
-        "-e", ssh_proxy_cmd,
-        origem_local, # Arquivo ou diretório local
-        f"{servidor_info['user']}@{servidor_info['host']}:{destino_remoto}" # Destino remoto
-    ]
-
     def iniciar_rsync():
         try:
-            messagebox.showinfo("Rsync", f"Iniciando cópia: {' '.join(rsync_cmd)}")
-            # Executa o comando e espera a conclusão
-            resultado = subprocess.run(rsync_cmd, check=True, capture_output=True, text=True)
-            messagebox.showinfo("Rsync Concluído", f"Cópia finalizada com sucesso!\n\nSaída:\n{resultado.stdout}")
+            # Construir o comando SSH Proxy/Jump
+            ssh_proxy_cmd = (
+                f"ssh -J {bastion_info['user']}@{bastion_info['host']}:{bastion_info['port']}"
+            )
+
+            # Construir o comando rsync
+            rsync_cmd = [
+                "rsync",
+                "-avh", # a=archive, v=verbose, h=human-readable
+                "-e", ssh_proxy_cmd,
+                origem_local, 
+                f"{servidor_info['user']}@{servidor_info['host']}:{destino_remoto}" 
+            ]
+
+            messagebox.showinfo(
+                "Rsync - Iniciando", 
+                f"A cópia será iniciada em um terminal externo. Aguarde a conclusão.\n\nComando: {' '.join(rsync_cmd)}"
+            )
+            
+            # Executa o comando em um novo terminal para que o usuário possa acompanhar o progresso
+            if sys.platform.startswith('win'):
+                # No Windows, usa 'start cmd /k' ou similar para abrir uma nova janela
+                # No Linux/Mac, tenta usar 'xterm -e' ou 'gnome-terminal -e'   <-------------Preciso adaptar isso
+                comando_completo = ["start", "cmd", "/k"] + rsync_cmd
+            else:
+                subprocess.run(rsync_cmd, check=True, text=True)
+                messagebox.showinfo("Rsync Concluído", "Cópia finalizada com sucesso! Verifique o console para detalhes.")
+                return
+
+            # Executa a cópia
+            subprocess.run(comando_completo, check=True)
+
         except subprocess.CalledProcessError as e:
-            messagebox.showerror("Erro no Rsync", f"Falha na cópia:\n{e.stderr}")
+            messagebox.showerror("Erro no Rsync", f"Falha na cópia. Código de erro: {e.returncode}\n\n{e.stderr}")
         except FileNotFoundError:
              messagebox.showerror("Erro no Rsync", "O comando 'rsync' não foi encontrado. Verifique se está instalado e no PATH.")
         except Exception as e:
@@ -133,3 +149,34 @@ def copiar_rsync(bastion_info, servidor_info, origem_local, destino_remoto):
 
     # Executa em uma thread para não travar a GUI
     threading.Thread(target=iniciar_rsync).start()
+
+def criar_tunel_socks(bastion_info, porta_local=8888):
+    def iniciar_tunel_socks():
+        try:
+            # Se conecta apenas ao Bastion.
+            with SSHTunnelForwarder(
+                (bastion_info["host"], int(bastion_info["port"])),
+                ssh_username=bastion_info["user"],
+                ssh_password=bastion_info["password"],
+            ) as tunel:
+                socks_cmd = [
+                    "ssh",
+                    "-D", str(porta_local), # Porta local para o SOCKS
+                    "-C", "-N", # Comprimir, e Não executar comando remoto
+                    "-J", f"{bastion_info['user']}@{bastion_info['host']}:{bastion_info['port']}",
+                    f"{bastion_info['user']}@{bastion_info['host']}" # Conexão SOCKS ao Bastion
+                ]
+                
+                messagebox.showinfo(
+                    "Túnel SOCKS",
+                    f"Túnel SOCKS ativo na porta: localhost:{porta_local}\n\n"
+                    "Configure seu navegador/aplicação para usar este SOCKS Proxy (v5)."
+                )
+                
+                # Executa o comando e mantém a conexão aberta no console
+                subprocess.run(socks_cmd, check=True) # Isso vai bloquear até ser fechado (Ctrl+C)
+
+        except Exception as e:
+            messagebox.showerror("Erro no Túnel SOCKS", str(e))
+
+    threading.Thread(target=iniciar_tunel_socks).start()
